@@ -122,6 +122,8 @@ export abstract class BaseCommand<F = never> {
 
 		await Container.get(LoadNodesAndCredentials).init();
 
+		this.logStartupConfiguration();
+
 		await this.dbConnection
 			.init()
 			.catch(
@@ -187,6 +189,165 @@ export abstract class BaseCommand<F = never> {
 
 	protected async stopProcess() {
 		// This needs to be overridden
+	}
+
+	private logStartupConfiguration(): void {
+		const {
+			database,
+			executions,
+			cache,
+			queue,
+			generic,
+			logging,
+			endpoints,
+			security,
+			taskRunners,
+			host,
+			port,
+			protocol,
+			multiMainSetup,
+		} = this.globalConfig;
+
+		// Instance identity
+		this.logger.info('Instance configuration', {
+			instanceId: this.instanceSettings.instanceId,
+			instanceType: this.instanceSettings.instanceType,
+			instanceRole: this.instanceSettings.instanceRole,
+			hostId: this.instanceSettings.hostId,
+			isDocker: this.instanceSettings.isDocker,
+			n8nFolder: this.instanceSettings.n8nFolder,
+		});
+
+		// Server
+		this.logger.info('Server configuration', {
+			protocol,
+			host,
+			port,
+			timezone: generic.timezone,
+			releaseChannel: generic.releaseChannel,
+			gracefulShutdownTimeout: generic.gracefulShutdownTimeout,
+		});
+
+		// Database
+		if (database.type === 'postgresdb') {
+			const pg = database.postgresdb;
+			this.logger.info('Database configuration', {
+				type: database.type,
+				host: pg.host,
+				port: pg.port,
+				database: pg.database,
+				user: pg.user,
+				schema: pg.schema,
+				poolSize: pg.poolSize,
+				ssl: pg.ssl.enabled,
+				tablePrefix: database.tablePrefix || '(none)',
+				loggingEnabled: database.logging.enabled,
+				loggingOptions: database.logging.options,
+			});
+		} else {
+			this.logger.info('Database configuration', {
+				type: database.type,
+				database: database.sqlite.database,
+				poolSize: database.sqlite.poolSize,
+				executeVacuumOnStartup: database.sqlite.executeVacuumOnStartup,
+				tablePrefix: database.tablePrefix || '(none)',
+				loggingEnabled: database.logging.enabled,
+				loggingOptions: database.logging.options,
+			});
+		}
+
+		// Executions
+		this.logger.info('Execution configuration', {
+			mode: executions.mode,
+			concurrencyProductionLimit: executions.concurrency.productionLimit,
+			concurrencyEvaluationLimit: executions.concurrency.evaluationLimit,
+			timeout: executions.timeout,
+			maxTimeout: executions.maxTimeout,
+			saveDataOnError: executions.saveDataOnError,
+			saveDataOnSuccess: executions.saveDataOnSuccess,
+			saveExecutionProgress: executions.saveExecutionProgress,
+			saveDataManualExecutions: executions.saveDataManualExecutions,
+			pruneData: executions.pruneData,
+			pruneDataMaxAge: executions.pruneDataMaxAge,
+			pruneDataMaxCount: executions.pruneDataMaxCount,
+		});
+
+		// Cache
+		this.logger.info('Cache configuration', {
+			backend: cache.backend,
+			memoryMaxSize: cache.memory.maxSize,
+			memoryTtl: cache.memory.ttl,
+			redisPrefix: cache.redis.prefix,
+			redisTtl: cache.redis.ttl,
+		});
+
+		// Queue / Redis (only relevant in queue mode)
+		if (executions.mode === 'queue') {
+			const redis = queue.bull.redis;
+			this.logger.info('Queue (Redis) configuration', {
+				host: redis.host,
+				port: redis.port,
+				db: redis.db,
+				tls: redis.tls,
+				clusterNodes: redis.clusterNodes || '(none)',
+				bullPrefix: queue.bull.prefix,
+				lockDuration: queue.bull.settings.lockDuration,
+				stalledInterval: queue.bull.settings.stalledInterval,
+			});
+		}
+
+		// Logging
+		this.logger.info('Logging configuration', {
+			level: logging.level,
+			outputs: logging.outputs,
+			format: logging.format,
+			scopes: logging.scopes,
+			fileLocation: logging.file.location,
+			fileSizeMax: logging.file.fileSizeMax,
+			fileCountMax: logging.file.fileCountMax,
+		});
+
+		// Endpoints
+		this.logger.info('Endpoint configuration', {
+			rest: endpoints.rest,
+			webhook: endpoints.webhook,
+			webhookTest: endpoints.webhookTest,
+			webhookWaiting: endpoints.webhookWaiting,
+			form: endpoints.form,
+			health: endpoints.health,
+			disableUi: endpoints.disableUi,
+			payloadSizeMax: endpoints.payloadSizeMax,
+			metricsEnabled: endpoints.metrics.enable,
+			metricsPrefix: endpoints.metrics.prefix,
+		});
+
+		// Security
+		this.logger.info('Security configuration', {
+			blockFileAccessToN8nFiles: security.blockFileAccessToN8nFiles,
+			restrictFileAccessTo: security.restrictFileAccessTo,
+			crossOriginOpenerPolicy: security.crossOriginOpenerPolicy,
+			disableWebhookHtmlSandboxing: security.disableWebhookHtmlSandboxing,
+			daysAbandonedWorkflow: security.daysAbandonedWorkflow,
+		});
+
+		// Task runners
+		this.logger.info('Task runner configuration', {
+			mode: taskRunners.mode,
+			port: taskRunners.port,
+			maxConcurrency: taskRunners.maxConcurrency,
+			taskTimeout: taskRunners.taskTimeout,
+			insecureMode: taskRunners.insecureMode,
+			maxOldSpaceSize: taskRunners.maxOldSpaceSize || '(default)',
+		});
+
+		// Multi-main setup
+		this.logger.info('Multi-main configuration', {
+			enabled: multiMainSetup.enabled,
+			...(multiMainSetup.enabled && {
+				interval: multiMainSetup.interval,
+				ttl: multiMainSetup.ttl,
+			}),
+		});
 	}
 
 	protected async initCrashJournal() {
