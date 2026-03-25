@@ -54,14 +54,29 @@ export class DbConnection {
 			await this.dataSource.initialize();
 		} catch (e) {
 			let error = ensureError(e);
-			if (
-				options.type === 'postgres' &&
-				error.message === 'Connection terminated due to connection timeout'
-			) {
-				error = new DbConnectionTimeoutError({
-					cause: error,
-					configuredTimeoutInMs: options.connectTimeoutMS!,
-				});
+			if (options.type === 'postgres') {
+				if (error.message === 'Connection terminated due to connection timeout') {
+					error = new DbConnectionTimeoutError({
+						cause: error,
+						configuredTimeoutInMs: options.connectTimeoutMS!,
+					});
+				} else if (error.message.includes('password authentication failed')) {
+					this.logger.error(
+						`Database authentication failed. Check DB_POSTGRESDB_USER ("${options.username}") and DB_POSTGRESDB_PASSWORD in your configuration.`,
+					);
+				} else if (error.message.includes('database') && error.message.includes('does not exist')) {
+					this.logger.error(
+						`Database "${options.database}" does not exist. Check DB_POSTGRESDB_DATABASE in your configuration.`,
+					);
+				} else if (error.message.includes('ECONNREFUSED')) {
+					this.logger.error(
+						`Could not reach database at "${options.host}:${options.port}". Check DB_POSTGRESDB_HOST and DB_POSTGRESDB_PORT in your configuration.`,
+					);
+				} else if (error.message.includes('ENOTFOUND')) {
+					this.logger.error(
+						`Could not resolve database host "${options.host}". Check DB_POSTGRESDB_HOST in your configuration.`,
+					);
+				}
 			}
 			throw error;
 		}
